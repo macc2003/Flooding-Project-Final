@@ -1,0 +1,16 @@
+Value,Description,Manning N
+1,"Open spaces, low vegetation surfaces",0.05
+2,"Open spaces, medium vegetation surfaces",0.06
+3,"Open spaces, high vegetation surfaces",0.1
+4,"Open spaces, water surfaces",0.03
+5,"Open spaces, road surfaces",0.012
+11,"built spaces, residential, building height <= 3m",0.09
+12,"built spaces, residential, 3m < building height <= 6m",0.09
+13,"built spaces, residential, 6m < building height <= 15m",0.09
+14,"built spaces, residential, 15m < building height <= 30m",0.16
+15,"built spaces, residential, building height > 30m",0.16
+21,"built spaces, non-residential, building height <= 3m",0.16
+22,"built spaces, non-residential, 3m < building height <= 6m",0.16
+23,"built spaces, non-residential, 6m < building height <= 15m",0.16
+24,"built spaces, non-residential, 15m < building height <= 30m",0.16
+25,"built spaces, non-residential, building height > 30m",0.16

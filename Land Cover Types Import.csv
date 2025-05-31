@@ -1,0 +1,24 @@
+Value,Land Cover Type,Soil Group A,Soil Group B,Soil Group C,Soil Group D
+0,Unknown,0,0,0,0
+20,Shrubs,41,60,74,80
+30,Herbaceous Vegetation,57,68,75,78
+40,Cultivated Vegetation,65,75,82,86
+50,Urban,70,82,88,91
+60,Bare,77,86,91,94
+70,Snow/Ice,100,100,100,100
+80,Water Bodies,100,100,100,100
+90,Herbaceous Wetlands,40,60,77,83
+100,Moss and Lichen,54,71,81,86
+111,Closed Forest - Evergreen Needle,33,58,72,78
+112,Closed Forest - Evergreen Broad Leef,30,55,70,77
+113,Closed Forest - Deciduous Needle,45,66,77,83
+114,Closed Forest - Deciduous Broad Leef,33,58,72,78
+115,Closed Forest - Mixed,35,59,73,79
+116,Closed Forest - Other,35,59,73,79
+121,Open Forest - Evergreen Needle,39,63,81,80
+122,Open Forest - Evergreen Broad Leaf,36,60,79,79
+123,Open Forest - Deciduous  Needle,51,71,86,85
+124,Open Forest - Deciduous Broad Leaf,39,63,81,80
+125,Open Forest - Mixed,41,64,82,81
+126,Open Forest - Other,41,64,82,81
+200,Ocean/Seas,100,100,100,100

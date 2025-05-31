@@ -1,0 +1,819 @@
+import ee
+import geemap
+import geemap.colormaps as cm
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import time
+
+from google.colab import drive
+drive.mount('/content/drive', force_remount=True)
+
+# Initialise GEE
+try:
+    ee.Initialize(project='mac-flooding-project')
+except Exception as e:
+    ee.Authenticate()
+    ee.Initialize(project='mac-flooding-project')
+
+run_title = 'Huaraz'
+
+# Define geometry
+
+# Full Area
+
+geometry = ee.Geometry.Polygon([[-77.65, -9.7],
+                                [-77.3, -9.7],
+                                [-77.3, -9.375],
+                                [-77.65, -9.375]])
+
+utm_zone = 18
+utm_crs = f'EPSG:327{utm_zone}' #For the southern hemisphere
+
+Map = geemap.Map()
+
+Map.addLayer(geometry, {'color': 'red', 'fillColor': 'blue', 'opacity': 0.5}, 'My Polygon')
+
+Map.centerObject(geometry, 10)
+
+Map
+
+# Load the SRTM DEM dataset
+dataset = ee.Image('USGS/SRTMGL1_003')
+elevation = dataset.select('elevation')
+
+utm_zone = 18
+utm_crs = f'EPSG:327{utm_zone}'
+
+# Reproject the elevation data
+elevation_reprojected = elevation.reproject(
+    crs = utm_crs,
+    scale = 30 # Output resolution in meters
+)
+
+elevation_clipped = elevation_reprojected.clip(geometry)
+
+export_params = {
+    'region': geometry,
+    'scale': 30,  # Resolution in meters
+    'crs': utm_crs,
+    'fileNamePrefix': f"dem_{run_title}",
+    'fileFormat': 'GeoTIFF',
+}
+
+task = ee.batch.Export.image.toDrive(
+    image=elevation_reprojected,
+    **export_params
+)
+task.start()
+
+print("Exporting DEM in meters, check Google Drive for the output.")
+
+# Snowmelt
+
+# Load the dataset and filter by date
+dataset = ee.ImageCollection('ECMWF/ERA5_LAND/HOURLY') \
+    .filterDate('2025-01-01', '2025-01-02')
+
+# Calculate the total snowmelt
+snowmelt = dataset.select('snowmelt') \
+    .sum()
+
+snowmelt_reprojected = snowmelt.reproject(
+    crs = utm_crs,
+    scale = 11132 # Output resolution in meters
+)
+
+
+snowmelt_clipped = snowmelt_reprojected.clip(geometry)
+
+visualization = {
+  'min': 0,
+  'max': 0.01,
+  'palette': [
+    '000080', '0000d9', '4000ff', '8000ff', '0080ff', '00ffff',
+    '00ff80', '80ff00', 'daff00', 'ffff00', 'fff500', 'ffda00',
+    'ffb000', 'ffa400', 'ff4f00', 'ff2500', 'ff0a00', 'ff00ff',
+  ]
+}
+
+Map = geemap.Map()
+
+Map.addLayer(snowmelt_clipped, visualization, 'Snowmelt', True, 0.8)
+Map.add_colorbar(visualization, label='Snowmelt (m)')
+
+Map.centerObject(geometry, 10)
+
+Map.centerObject(geometry, 10)  
+
+Map
+
+export_params = {
+    'image': snowmelt_clipped,  # The clipped land cover image
+    'description': f'snowmelt_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'crs': utm_crs,
+    'scale': 11132,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting land cover data to Google Drive. Task ID: {task.id}")
+
+# Add the following lines:
+import time
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+# Land Cover
+
+# Load land cover dataset and clip to geometry
+dataset = ee.Image('COPERNICUS/Landcover/100m/Proba-V-C3/Global/2019').select(
+    'discrete_classification'
+)
+
+utm_zone = 18
+utm_crs = f'EPSG:327{utm_zone}' #For the southern hemisphere. For the northern hemisphere replace 327 with 326
+
+# Reproject the data
+landcover_reprojected = dataset.reproject(
+    crs = utm_crs,
+    scale = 100 # Output resolution in meters
+)
+
+landcover_clipped = landcover_reprojected.clip(geometry)
+
+Map = geemap.Map()
+Map.centerObject(geometry, 10)  # Center on your geometry
+
+Map.addLayer(landcover_clipped, {}, 'Land Cover')
+
+Map
+
+export_params = {
+    'image': landcover_clipped,  # The clipped land cover image
+    'description': f'landcover_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'crs': utm_crs,
+    'scale': 100,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting land cover data to Google Drive. Task ID: {task.id}")
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+# Settlement Characteristics
+
+dataset = ee.Image("JRC/GHSL/P2023A/GHS_BUILT_C/2018").select('built_characteristics')
+
+
+utm_zone = 18
+utm_crs = f'EPSG:327{utm_zone}' #For the southern hemisphere. For the northern hemisphere replace 327 with 326
+
+# Reproject the data
+built_reprojected = dataset.reproject(
+    crs = utm_crs,
+    scale = 10 # Output resolution in meters
+)
+
+built_clipped = built_reprojected.clip(geometry)
+
+Map = geemap.Map()
+Map.centerObject(geometry, 10)
+
+Map.addLayer(built_clipped, {}, 'Built Characteristics')
+Map
+
+export_params = {
+    'image': built_clipped,  # The clipped land cover image
+    'description': f'built_char_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'crs': utm_crs,
+    'scale': 10,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting land cover data to Google Drive. Task ID: {task.id}")
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+# ET
+
+modis = ee.ImageCollection('MODIS/061/MOD16A2') \
+    .filterBounds(geometry) \
+    .filterDate('2025-01-01', '2025-01-02')  # Adjust date range
+
+et = modis.select('ET')
+
+vis_et = {
+  'min': 0,
+  'max': 300,
+  'palette': ['blue', 'white', 'green']
+}
+
+Map = geemap.Map()
+Map.addLayer(et, vis_et, 'et')
+Map.add_colorbar(vis_et, label="ET")
+Map.centerObject(geometry,12)
+Map
+
+dataset = ee.ImageCollection("IDAHO_EPSCOR/TERRACLIMATE") \
+    .filterBounds(geometry) \
+    .filterDate('2024-01-01', '2024-01-02')  # Adjust date range
+
+et = dataset.select('aet')
+
+vis_et = {
+  'min': 0,
+  'max': 3140,
+  'palette': ['blue', 'white', 'green']
+}
+
+Map = geemap.Map()
+Map.addLayer(et, vis_et, 'ET')
+Map.add_colorbar(vis_et, label="ET")
+Map.centerObject(geometry,12)
+Map
+
+first_image = et.first()  # Get the first image from the collection
+
+et_reprojected = first_image.reproject(
+    crs = utm_crs,
+    scale = 5000 # Output resolution in meters
+)
+
+et_clipped = et_reprojected.clip(geometry)
+
+Map.addLayer(et_clipped, vis_et, 'ET Clipped')
+Map.centerObject(geometry,12)
+Map
+# Calculate the mean of the clipped ET
+mean_et = et_clipped.reduceRegion(
+    reducer=ee.Reducer.mean(),
+    geometry=geometry,
+    scale=5000
+)
+
+average_et_value = mean_et.get('aet').getInfo()
+
+print(f"The average ET of the clipped area is: {average_et_value}")
+
+# NDVI
+
+modis = ee.ImageCollection('MODIS/061/MOD13Q1') \
+    .filterBounds(geometry) \
+    .filterDate('2025-01-01', '2025-01-31')  # Adjust date range
+
+ndvi = modis.select('NDVI')
+
+vis_ndvi = {
+  'min': -2000,
+  'max': 10000,
+  'palette': ['blue', 'white', 'green']
+}
+
+Map = geemap.Map()
+Map.addLayer(ndvi, vis_ndvi, 'NDVI Clipped')
+Map.centerObject(geometry,12)
+Map
+
+first_image = ndvi.first()  # Get the first image from the collection
+
+ndvi_reprojected = first_image.reproject(
+    crs = utm_crs,
+    scale = 250 # Output resolution in meters
+)
+
+ndvi_clipped = ndvi_reprojected.clip(geometry)
+
+export_params_single = {
+    'image': ndvi_clipped ,
+    'description': f'ndvi_rpj_{run_title}',
+    'region': geometry,
+    'scale': 250,
+    'maxPixels': 1e13,
+    'fileFormat': 'GeoTIFF'
+}
+task_single = ee.batch.Export.image.toDrive(**export_params_single)
+task_single.start()
+
+print(f"Exporting NDVI data to Google Drive. Task ID: {task_single.id}")
+
+while task_single.active():
+    print('Polling for task (id: {}).'.format(task_single.id))
+    time.sleep(5)
+
+if task_single.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+# Sand Content
+
+dataset = ee.Image("OpenLandMap/SOL/SOL_SAND-WFRACTION_USDA-3A1A1A_M/v02")
+
+vis_params = {
+    'min': 0,  # Minimum value for the color scale
+    'max': 100,  # Maximum value for the color scale
+    'palette': ['blue', 'white', 'red'],  # Color palette
+}
+
+sand_content = dataset.select('b0')
+
+sand_reprojected = sand_content.reproject(
+    crs = utm_crs,
+    scale = 250 # Output resolution in meters
+)
+
+sand_clipped = sand_reprojected.clip(geometry)
+
+Map = geemap.Map()
+
+Map.addLayer(sand_clipped, vis_params, 'Soil Sand Content %')
+
+Map.centerObject(geometry,12)
+Map
+
+export_params = {
+    'image': sand_clipped,
+    'description': f'sand_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'scale': 250,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting sand data to Google Drive. Task ID: {task.id}")
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+# Clay Content
+
+dataset = ee.Image("OpenLandMap/SOL/SOL_CLAY-WFRACTION_USDA-3A1A1A_M/v02")
+
+vis_params = {
+    'min': 1,  # Minimum value for the color scale
+    'max': 100,  # Maximum value for the color scale
+    'palette': ['blue', 'white', 'red'],  # Color palette
+}
+
+clay_content = dataset.select('b0')
+
+clay_reprojected = clay_content.reproject(
+    crs = utm_crs,
+    scale = 250 # Output resolution in meters
+)
+
+clay_clipped = clay_reprojected.clip(geometry)
+Map = geemap.Map()
+
+Map.addLayer(clay_clipped, vis_params, 'Soil Clay Content %')
+Map.centerObject(geometry,12)
+Map
+
+export_params = {
+    'image':  clay_clipped,  # The clipped land cover image
+    'description': f'clay_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'scale': 250,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting clay data to Google Drive. Task ID: {task.id}")
+
+import time
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+# Temperature
+
+dataset = ee.ImageCollection("MODIS/061/MOD11A1")  \
+    .filterBounds(geometry) \
+    .filterDate('2025-01-01', '2025-01-31')  # Adjust date range
+
+temperature = dataset.select('LST_Day_1km')
+
+single_image = temperature.mean()  # Get the first image from the collection
+
+
+temperature_reprojected = single_image.reproject(
+    crs = utm_crs,
+    scale = 1000 # Output resolution in meters
+)
+
+temperature_clipped = temperature_reprojected.clip(geometry)
+
+vis_temperature = {
+  'min': 12500,
+  'max': 17500,
+  'palette': ['blue', 'white', 'green']
+}
+
+Map = geemap.Map()
+Map.addLayer(temperature_clipped, vis_temperature, 'Temperature Clipped')
+Map.add_colorbar(vis_temperature, label="Temperature")
+Map.centerObject(geometry,12)
+Map
+
+export_params = {
+    'image':  temperature_clipped,
+    'description': f'temp_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'scale': 1000,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting temperature data to Google Drive. Task ID: {task.id}")
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+# Surface Radiation
+
+dataset = ee.ImageCollection("NASA/GSFC/MERRA/rad/2") \
+    .filterBounds(geometry) \
+    .filterDate('2025-01-01', '2025-01-02')  # Adjust date range
+
+absorbed_longwave = dataset.select('LWGAB')
+
+single_image = absorbed_longwave.first()  # Get the first image from the collection
+
+ab_longwave_reprojected = single_image.reproject(
+    crs = utm_crs,
+    scale = 250 # Output resolution in meters
+)
+
+ab_longwave_clipped = ab_longwave_reprojected.clip(geometry)
+
+vis_radiation = {
+  'min': 40,
+  'max': 480,
+  'palette': ['001137', '01abab', 'e7eb05', '620500']
+}
+
+Map = geemap.Map()
+Map.addLayer(ab_longwave_clipped, vis_radiation, 'Downward Longwave Radiation Clipped')
+Map.add_colorbar(vis_radiation, label="Radiation")
+
+Map.centerObject(geometry,12)
+Map
+
+export_params = {
+    'image':  ab_longwave_clipped,
+    'description': f'ab_longwave_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'scale': 250,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting data to Google Drive. Task ID: {task.id}")
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+dataset = ee.ImageCollection("NASA/GSFC/MERRA/rad/2") \
+    .filterBounds(geometry) \
+    .filterDate('2025-01-01', '2025-01-02')  # Adjust date range
+
+emitted_longwave = dataset.select('LWGEM')
+
+single_image = emitted_longwave.first()  # Get the first image from the collection
+
+em_longwave_reprojected = single_image.reproject(
+    crs = utm_crs,
+    scale = 250 # Output resolution in meters
+)
+
+em_longwave_clipped = em_longwave_reprojected.clip(geometry)
+
+vis_radiation = {
+  'min': 60,
+  'max': 640,
+  'palette': ['001137', '01abab', 'e7eb05', '620500']
+}
+
+Map = geemap.Map()
+Map.addLayer(em_longwave_clipped, vis_radiation, 'Downward Longwave Radiation Clipped')
+Map.add_colorbar(vis_radiation, label="Radiation")
+
+Map.centerObject(geometry,12)
+Map
+
+export_params = {
+    'image':  em_longwave_clipped,
+    'description': f'em_longwave_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'scale': 250,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting data to Google Drive. Task ID: {task.id}")
+
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+dataset = ee.ImageCollection('MODIS/062/MCD18A1') \
+    .filterBounds(geometry) \
+      .filterDate('2024-01-01', '2024-01-02')   # Adjust date range
+
+absorbed_shortwave = dataset.select('GMT_1200_DSR')
+
+first_image = absorbed_shortwave.first()  # Get the first image from the collection
+
+ab_shortwave_reprojected = first_image.reproject(
+    crs = utm_crs,
+    scale = 500 # Output resolution in meters
+)
+
+ab_shortwave_clipped = ab_shortwave_reprojected.clip(geometry)
+
+vis_radiation = {
+  'min': 0,
+  'max': 1400,
+  'palette': ['001137', '01abab', 'e7eb05', '620500']
+}
+
+
+Map = geemap.Map()
+Map.addLayer(ab_shortwave_clipped, vis_radiation, 'Absorbed Shortwave Radiation Clipped')
+Map.add_colorbar(vis_radiation, label="Radiation")
+Map.centerObject(geometry,12)
+Map
+
+# Define export parameters
+export_params = {
+    'image':  ab_shortwave_clipped,
+    'description': f'ab_shortwave_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'scale': 500,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting data to Google Drive. Task ID: {task.id}")
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+# Soil Moisture Content
+
+dataset = ee.ImageCollection('NASA/GLDAS/V021/NOAH/G025/T3H')\
+    .filterBounds(geometry) \
+    .filterDate('2025-01-01', '2025-01-02')  # Adjust date range
+
+vis_params = {
+    'min': 0,  # Minimum value for the color scale
+    'max': 100,  # Maximum value for the color scale
+    'palette': ['blue', 'white', 'red'],  # Color palette
+}
+
+moisture = dataset.select('SoilMoi0_10cm_inst')
+
+moisture_clipped = moisture.map(lambda image: image.clip(geometry))
+
+
+single_image = moisture_clipped.first()  # Get the first image from the collection
+
+
+moisture_reprojected = single_image.reproject(
+    crs = utm_crs,
+    scale = 11132 # Output resolution in meters
+)
+
+moisture_clipped = moisture_reprojected.clip(geometry)
+
+Map = geemap.Map()
+
+Map.addLayer(moisture_clipped, vis_params, 'Soil Moisture Content')
+Map.add_colorbar(vis_params, label="Soil Moisture", position= 'bottomright')
+
+Map.centerObject(geometry,12)
+Map
+
+export_params = {
+    'image':  moisture_reprojected,
+    'description': f'moisture_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'scale': 11132,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting temperature data to Google Drive. Task ID: {task.id}")
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+# Field Capacity
+
+dataset = ee.Image("OpenLandMap/SOL/SOL_WATERCONTENT-33KPA_USDA-4B1C_M/v01")
+
+vis_params = {
+    'min': 0,  # Minimum value for the color scale
+    'max': 55,  # Maximum value for the color scale
+    'palette': ['blue', 'white', 'red'],  # Color palette
+}
+
+field_capacity = dataset.select('b0')
+
+field_capacity_reprojected = field_capacity.reproject(
+    crs = utm_crs,
+    scale = 250 # Output resolution in meters
+)
+
+field_capacity_clipped = field_capacity_reprojected.clip(geometry)
+
+Map = geemap.Map()
+
+Map.addLayer(field_capacity_clipped, vis_params, 'Field Capacity')
+Map.add_colorbar(vis_params, label="Soil Field Capacity")
+
+Map.centerObject(geometry,12)
+Map
+
+export_params = {
+    'image':  field_capacity_clipped,
+    'description': f'fc_rpj_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'scale': 250,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting clay data to Google Drive. Task ID: {task.id}")
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
+
+# Rivers
+
+dataset = ee.Image('MERIT/Hydro/v1_0_1')
+
+rivers = dataset.select('viswth')
+
+rivers_reprojected = rivers.reproject(
+    crs = utm_crs,
+    scale = 90 # Output resolution in meters
+)
+
+rivers_clipped = rivers_reprojected.clip(geometry)
+
+vis_params = {
+     # Maximum value for the color scale
+    'palette': ['white', 'blue'],  # Color palette
+}
+
+Map = geemap.Map()
+
+Map.addLayer(rivers_clipped, vis_params)
+
+Map.centerObject(geometry,12)
+Map
+
+export_params = {
+    'image':  rivers_clipped,
+    'description': f'rivers_{run_title}',  # Description for the task
+    'region': geometry,  # Your geometry for the export region
+    'scale': 90,  # Adjust scale as needed (e.g., 100 for 100m resolution)
+    'maxPixels': 1e13,  # Adjust if needed for large exports
+    'fileFormat': 'GeoTIFF'
+}
+
+task = ee.batch.Export.image.toDrive(**export_params)
+task.start()
+
+print(f"Exporting clay data to Google Drive. Task ID: {task.id}")
+
+while task.active():
+    print('Polling for task (id: {}).'.format(task.id))
+    time.sleep(5)
+
+if task.status()['state'] == 'COMPLETED':
+    print("File uploaded successfully!")
+
+else:
+    print("File upload failed.")
