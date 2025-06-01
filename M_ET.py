@@ -51,7 +51,7 @@ def get_et_water_loss_rate(run_title):
             e_t = ET(R_n, ndvi[0][i][j], temperature[0][i][j], a_0, a_1, a_2)
             ET_array[i][j] = e_t
 
-    water_loss_rate = ET_array / (2.45 * 10 ** 6 * 1000) * 1000
+    water_loss_rate = ET_array / (2.26 * 10 ** 6 * 1000) * 1000
 
 
     output_directory = f"{run_title}/produced"  # Ensure this folder exists or create it
